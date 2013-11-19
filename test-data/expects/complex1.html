@@ -1,0 +1,68 @@
+<html>
+  <head>
+    <meta charset="UTF-8"/>
+    <title>Merchant example</title>
+    <!--Removed External Script: http://chudnov.com/research/jsinline/examples/mashups/payment/iframe/ulj.js-->
+  </head>
+  <body>
+    <div id="order_summary">
+      <h1>Your order summary</h1>
+      <form id="cart_form" onsubmit="onCartUpdate()">
+	<table id="cart">
+	  <thead>
+	    <tr>
+	      <th>Item</th>
+	      <th>Price</th>
+	      <th>Qty</th>
+	    </tr>
+	  </thead>
+	  <tbody>
+	    <tr>
+	      <td>A bar of foo</td>
+	      <td>5</td>
+	      <td><input type="text" value="1"/></td>
+	    </tr>
+	    <tr>
+	      <td>Sprocket 13-pin</td>
+	      <td>7</td>
+	      <td><input type="text" value="1"/></td>
+	    </tr>
+	  </tbody>
+	</table>
+	<input type="submit" value="Update total"/>
+      </form>
+      <script type="text/javascript">
+        var key = 42;
+        window.onmessage = function (e) {
+           var confirmation;
+           try {
+              confirmation = JSON.parse(e.data);
+           } catch (e) {
+              alert("Received invalid confirmation from the payment service. Please try again");
+           }
+           if (confirmation) {
+              /*if (confirmation.transaction_id * confirmation.amount * key == 
+                  confirmation.signature) {*/
+              if (confirmation.signature == 42) {
+                     alert("Your order has been confirmed! Thank you!");
+              } else alert("Received invalid confirmation from the payment service. Please try again");
+           }
+        }
+        function onCartUpdate(e) {
+           var total = 0;
+           rows = document.getElementById("cart").tBodies[0].rows;
+           for (var i = 0; i &lt; rows.length; i++) {
+               total += parseInt(rows[i].cells[1].firstChild.data)*
+                        parseInt(rows[i].cells[2].firstChild.value);
+           }
+           var w = document.getElementById("payment_frame").contentWindow;
+           w.postMessage(total.toString(), "http://chudnov.com");
+           if(e.preventDefault) e.preventDefault();
+           e.returnValue=false;
+        }, true);
+      </script>
+    </div>
+    <iframe id="payment_frame">
+    </iframe>
+  <script type="text/javascript"></script></body>
+</html>
