@@ -1,0 +1,8 @@
+= 0.10 =
+Changed the API in Text.Html.Consolidate: extractJSArr and extract now
+return parsed JavaScript instead of pretty-printed, similarly insertJSArr
+accepts parsed JavaScript instead of a string. Added a function
+extractPretty that has the same functionality as extract in the previous version.
+
+= 0.9 =
+Initial release on Hackage.
