@@ -1,10 +1,10 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE Arrows #-}
--- | Implements extraction and consolidation of JavaScript code in an
--- HTML page.
+-- | Extraction and consolidation of JavaScript code in an HTML page.
 module Text.Html.Consolidate (-- * Simple API
                               consolidate
                              ,extract
+                             ,extractPretty
                               -- * Advanced arrow-based API
                              ,TArr                              
                              ,consolidateArr
@@ -13,6 +13,7 @@ module Text.Html.Consolidate (-- * Simple API
                              ,insertJSArr
                              ,parseHTML
                              ,renderHTML
+                             ,ConsState
                              ) where
 
 import Text.XML.HXT.Core hiding (swap)
@@ -36,6 +37,7 @@ import Data.Char
 import Data.Maybe (isJust, fromJust, maybeToList)
 import Control.Monad hiding (when)
 
+-- | Consolidation state
 data ConsState = ConsState Bool  -- Ignore errors?
                            (Maybe URI) -- Base URI of the web page,
                                        -- for resolving relative URI's
@@ -44,7 +46,9 @@ data ConsState = ConsState Bool  -- Ignore errors?
                            [Statement ()]
 
 -- | A constructor function for making an initial consolidation state
--- (needed for running the arrows in the advanced API)
+-- (needed for running the arrows in the advanced API). Example usage:
+--
+-- > runXIOState (initialState $ initialConsState ignoreErrors muri []) $ someArrow
 initialConsState :: Bool -- ^ Whether to ignore errors (parse errors,
                          -- resource not found etc.)
                  -> Maybe URI -- ^ base URI
@@ -72,7 +76,7 @@ parseHTML s mbase_uri =
 renderHTML :: ConsState -> TArr XmlTree XmlTree -> IO String
 renderHTML ns a = 
   let state  = initialState ns
-  in liftM head $ runXIOState state ((single a) >>> writeDocumentToString [withOutputHTML, withOutputEncoding utf8])
+  in liftM head $ runXIOState state (single a >>> writeDocumentToString [withOutputHTML, withOutputEncoding utf8])
 
 -- | Takes an HTML page source as a string and an optional base URI
 -- (for resolving relative URI's) and produces an HTML page with all
@@ -82,36 +86,45 @@ consolidate s mbase_uri =
   renderHTML (initialConsState True mbase_uri []) $ 
   parseHTML s mbase_uri >>> consolidateArr
 
--- | Main normalization arrow. Factored into extractJS and insertJS to
--- allow custom transformation of JavaScript inbetween.
+-- | The consolidation function with an arrow interface.
+--
+-- > consolidateArr = extractJSArr >>> insertJSArr
 consolidateArr :: TArr XmlTree XmlTree
 consolidateArr = extractJSArr >>> insertJSArr
 
--- | Extacts and pretty-print all the JavaScript code in the given
+-- | Extacts all JavaScript code in the given
 -- HTML page source as a single program. Takes an optional base URI
 -- for resolving relative URI's.
-extract :: String -> Maybe URI -> IO String
+extract :: String -> Maybe URI -> IO (JavaScript ())
 extract s mbase_uri =
   let state = initialState $ initialConsState True mbase_uri [] in
   do [(_, js)] <- runXIOState state $ single $ 
                   parseHTML s mbase_uri >>> extractJSArr
      return js
 
--- | Extracts all the JavaScript from HTML. There shouldn't be any
+-- | Extacts and pretty-prints all JavaScript code in the given
+-- HTML page source as a single program. Takes an optional base URI
+-- for resolving relative URI's.
+-- 
+-- > extractPretty s muri = liftM (show . prettyPrint) $ extract s muri
+extractPretty :: String -> Maybe URI -> IO String
+extractPretty s muri = liftM (show . prettyPrint) $ extract s muri
+
+-- | Extracts all JavaScript from HTML. There shouldn't be any
 -- JavaScript in the resulting XmlTree
-extractJSArr :: TArr XmlTree (XmlTree, String)
+extractJSArr :: TArr XmlTree (XmlTree, JavaScript ())
 extractJSArr =
-  ((choiceA [isAJavaScript :-> ifA (hasAttr "src") extractExternalScript
+  (choiceA [isAJavaScript :-> ifA (hasAttr "src") extractExternalScript
                                                    extractInlineScript
             ,(isElem >>> hasOneOfNames src_tags >>> hasOneOfAttrs src_attrs) :-> extractURLProp
             ,(isElem >>> hasOneOfAttrs event_handlers) :-> extractEventHandler
             ,this :-> this
-            ])
+            ]
    `processTopDownUntilAndWhenMatches` isFrame)
   >>>returnScript
   where returnScript = (returnA &&& getUserState)
                     >>> second (arr (\s -> let ConsState _ _ _ stmts = s 
-                                           in  show $ prettyPrint stmts))
+                                           in  Script () stmts))
         isFrame = isElem >>> (hasName "frame" <+> hasName "iframe")
         hasOneOfNames tagNames = (getName >>> isA (`elem` tagNames)) `guards` this
         hasOneOfAttrs attrNames = (getAttrl >>> hasOneOfNames attrNames) `guards` this
@@ -144,8 +157,8 @@ processTopDownUntilAndWhenMatches t p =
   -- ifA p (t >>> processChildren (processTopDownUntilAndWhenMatches t p)) returnA
                        
 -- | Inserts JavaScript at the end of the HTML body.
-insertJSArr :: TArr (XmlTree, String) XmlTree
-insertJSArr = (swap ^<< (second scriptElement)) >>>
+insertJSArr :: TArr (XmlTree, JavaScript a) XmlTree
+insertJSArr = (swap ^<< second scriptElement) >>>
               arr2A (\scr ->  processTopDown $ changeChildren (++ [scr]) `when`
                               hasName "body")
               
@@ -153,25 +166,25 @@ insertJSArr = (swap ^<< (second scriptElement)) >>>
 -- | Extracts the contents of inline scripts
 extractInlineScript :: TArr XmlTree XmlTree
 extractInlineScript = 
-  (firstChild >>> 
-   getText >>> 
-   parseJS >>> 
-   arr removeAnnotations >>> 
-   appendScript >>>
-   cmt "Removed Inline Script") 
-
+  firstChild >>> 
+  getText >>> 
+  parseJS >>> 
+  arr removeAnnotations >>> 
+  appendScript >>>
+  cmt "Removed Inline Script"
+  
 -- | Extracts the contents of externally references scripts
 extractExternalScript :: TArr XmlTree XmlTree
 extractExternalScript = 
-  ((getAttrValue "src" >>>
-    (downloadArr >>>
-     parseJS >>>
-     arr removeAnnotations >>>  
-     appendScript) 
-    &&&
-    (arr ("Removed External Script: " ++) >>>
-     mkCmt)) >>>
-   arr snd)
+  (getAttrValue "src" >>>
+   (downloadArr >>>
+    parseJS >>>
+    arr removeAnnotations >>>  
+    appendScript) 
+   &&&
+   (arr ("Removed External Script: " ++) >>>
+    mkCmt)) >>>
+  arr snd
   
 -- |Downloads the content, considering the input as a URL; performs
 -- decoding automatically.
@@ -290,8 +303,8 @@ appendScript = arr (\s -> let Script _ stmts = s in stmts) >>> appendStatements
                    
 -- constructors
 -- | Constructs a new JavaScript element
-scriptElement :: ArrowXml ar => ar String XmlTree
-scriptElement = (mkElement (mkName "script") (sattr "type" "text/javascript")) $< arr txt
+scriptElement :: ArrowXml ar => ar (JavaScript a) XmlTree
+scriptElement = mkElement (mkName "script") (sattr "type" "text/javascript") $< arr (txt . show . prettyPrint)
 
 -- Selectors
 -- | A selector for SCRIPT tags with JavaScript or empty type

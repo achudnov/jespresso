@@ -25,7 +25,7 @@ main = do args <- processArgs arguments
                 Just uri -> download uri []
                 Nothing  -> getContents >>= \c -> return (c, [])
           output <- case pmode args of
-            Extraction -> extract input (muri args)
+            Extraction -> extractPretty input (muri args)
             Consolidation -> consolidate input (muri args)
           putStr output
           return 1
