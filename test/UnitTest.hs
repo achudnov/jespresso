@@ -22,7 +22,7 @@ main = do allCases <- getDirectoryContents casesDir
           let validExpects = getValid allExpects
           defaultMain $ testGroup "Tests" $
             map genTest $ filter (`elem` validExpects) validCases
-            where getValid = filter $ \x -> FP.takeExtension x == ".js"
+            where getValid = filter $ \x -> FP.takeExtension x == ".html"
 
 casesDir = "test-data/cases"
 expectsDir = "test-data/expects"
