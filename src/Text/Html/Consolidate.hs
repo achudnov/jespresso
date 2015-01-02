@@ -361,19 +361,13 @@ hasAnyAttrs = foldl f zeroArrow
         f a attr = a <+> hasAttr attr
                    
 removeAttributes :: ArrowXml a => [String] -> a XmlTree XmlTree
-removeAttributes = foldl f zeroArrow
-  where f :: ArrowXml a => a XmlTree XmlTree -> String -> a XmlTree XmlTree
-        f a attr = a >>> removeAttr attr
+removeAttributes names =
+  processAttrl $ none `when` (foldr (\n a -> a <+> hasName n) none names)
   
-
 addIdIfNotPresent :: TArr XmlTree XmlTree
-addIdIfNotPresent = proc node -> do
-  idval <- getAttrValue "id" -< node
-  if null idval
-    then replaceChildren repFun -< node
-    else returnA -< node
-    where repFun = replaceChildren (genIdA >>> mkText)
-                   `when` (isAttr >>> hasName "id")
+addIdIfNotPresent =
+  ((genIdA &&& this) >>> (arr2A $ addAttr "id")) `when`
+  (getAttrValue "id" >>> isA null)
 
 -- | Selects the id of an element or adds a new one (and returns) if
 -- it's not present
