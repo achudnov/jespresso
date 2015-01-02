@@ -1,4 +1,7 @@
-= 0.10 =
+= 1.0.1 =
+Major bug fixes to handler and source attributes extraction.
+
+= 1.0 =
 Changed the API in Text.Html.Consolidate: extractJSArr and extract now
 return parsed JavaScript instead of pretty-printed, similarly insertJSArr
 accepts parsed JavaScript instead of a string. Added a function
