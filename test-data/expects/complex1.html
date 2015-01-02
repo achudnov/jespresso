@@ -7,7 +7,7 @@
   <body>
     <div id="order_summary">
       <h1>Your order summary</h1>
-      <form id="cart_form" onsubmit="onCartUpdate()">
+      <form id="cart_form">
 	<table id="cart">
 	  <thead>
 	    <tr>
@@ -31,38 +31,39 @@
 	</table>
 	<input type="submit" value="Update total"/>
       </form>
-      <script type="text/javascript">
-        var key = 42;
-        window.onmessage = function (e) {
-           var confirmation;
-           try {
-              confirmation = JSON.parse(e.data);
-           } catch (e) {
-              alert("Received invalid confirmation from the payment service. Please try again");
-           }
-           if (confirmation) {
-              /*if (confirmation.transaction_id * confirmation.amount * key == 
-                  confirmation.signature) {*/
-              if (confirmation.signature == 42) {
-                     alert("Your order has been confirmed! Thank you!");
-              } else alert("Received invalid confirmation from the payment service. Please try again");
-           }
-        }
-        function onCartUpdate(e) {
-           var total = 0;
-           rows = document.getElementById("cart").tBodies[0].rows;
-           for (var i = 0; i &lt; rows.length; i++) {
-               total += parseInt(rows[i].cells[1].firstChild.data)*
-                        parseInt(rows[i].cells[2].firstChild.value);
-           }
-           var w = document.getElementById("payment_frame").contentWindow;
-           w.postMessage(total.toString(), "http://chudnov.com");
-           if(e.preventDefault) e.preventDefault();
-           e.returnValue=false;
-        }, true);
-      </script>
+      <!--Removed Inline Script-->
     </div>
     <iframe id="payment_frame">
     </iframe>
-  <script type="text/javascript"></script></body>
+    <script type="text/javascript">
+     document.getElementById("cart_form").addEventListener("submit", function () {onCartUpdate();}, false);
+     var key = 42;
+     window.onmessage = function (e) {
+        var confirmation;
+        try {
+           confirmation = JSON.parse(e.data);
+        } catch (e) {
+           alert("Received invalid confirmation from the payment service. Please try again");
+        }
+        if (confirmation) {
+           if (confirmation.signature == 42) {
+              alert("Your order has been confirmed! Thank you!");
+           } else alert("Received invalid confirmation from the payment service. Please try again");
+        }
+     };
+     function onCartUpdate(e) {
+        var total = 0;
+        rows = document.getElementById("cart").tBodies[0].rows;
+        for (var i = 0; i &lt; rows.length; i++) {
+           total += parseInt(rows[i].cells[1].firstChild.data)*
+           parseInt(rows[i].cells[2].firstChild.value);
+        }
+        var w = document.getElementById("payment_frame").contentWindow;
+        w.postMessage(total.toString(), "http://chudnov.com");
+        if(e.preventDefault) e.preventDefault();
+        e.returnValue=false;
+     }
+     (document.getElementById("payment_frame")).src = "http://chudnov.com/research/jsinline/examples/mashups/payment/iframe/payment.html";
+    </script>
+  </body>
 </html>

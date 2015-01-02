@@ -42,11 +42,10 @@
               alert("Received invalid confirmation from the payment service. Please try again");
            }
            if (confirmation) {
-              /*if (confirmation.transaction_id * confirmation.amount * key == 
-                  confirmation.signature) {*/
               if (confirmation.signature == 42) {
                      alert("Your order has been confirmed! Thank you!");
-              } else alert("Received invalid confirmation from the payment service. Please try again");
+              } 
+	      else alert("Received invalid confirmation from the payment service. Please try again");
            }
         }
         function onCartUpdate(e) {
@@ -57,10 +56,12 @@
                         parseInt(rows[i].cells[2].firstChild.value);
            }
            var w = document.getElementById("payment_frame").contentWindow;
-           w.postMessage(total.toString(), "http://chudnov.com");
-           if(e.preventDefault) e.preventDefault();
+           w.postMessage(total.toString(),
+			 "http://chudnov.com");
+           if(e.preventDefault) 
+	      e.preventDefault();
            e.returnValue=false;
-        }, true);
+        }
       </script>
     </div>
     <iframe src="http://chudnov.com/research/jsinline/examples/mashups/payment/iframe/payment.html"
