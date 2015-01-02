@@ -1,5 +1,6 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE Arrows #-}
+{-# LANGUAGE OverloadedStrings #-}
 -- | Extraction and consolidation of JavaScript code in an HTML page.
 module Text.Html.Consolidate (-- * Simple API
                               consolidate
@@ -21,6 +22,7 @@ import Text.XML.HXT.Arrow.XmlState.RunIOStateArrow
 import Text.XML.HXT.Arrow.XmlArrow
 import Text.XML.HXT.TagSoup
 import Language.ECMAScript3.Syntax
+import Language.ECMAScript3.Syntax.CodeGen hiding (this)
 import Language.ECMAScript3.Syntax.Annotations
 import Language.ECMAScript3.PrettyPrint
 import Language.ECMAScript3.Parser
@@ -34,8 +36,10 @@ import Network.HTTP.Encoding
 import Data.ByteString.Lazy (ByteString)
 import System.Random
 import Data.Char
-import Data.Maybe (isJust, fromJust, maybeToList)
+import Data.Maybe (isJust, fromJust, maybeToList, fromMaybe)
 import Control.Monad hiding (when)
+import Data.Default.Instances.Base
+import Control.Applicative ((<$>))
 
 -- | Consolidation state
 data ConsState = ConsState Bool  -- Ignore errors?
@@ -222,8 +226,7 @@ extractURLProp =
   -- isElem >>>
   -- selectTags ["img", "a", "form", "frame", "iframe", "link"] >>>
   addIdIfNotPresent >>>
-  (((selectAttrValues ["src", "href", "action"] 
-     &&& selectId) >>>
+  (((selectAttrValues ["src", "href", "action"] &&& selectId) >>>
     arr (\((url, attrName), id) -> 
      Script () [ExprStmt () $ AssignExpr () OpAssign 
                 (LDot () (CallExpr ()
@@ -245,19 +248,29 @@ extractEventHandler =
                    "onmouseenter", "onmouseleave", "onmousemove", "onmouseout", 
                    "onmouseover", "onmouseup", "onreset", "onresize","onscroll",
                    "onselect", "onsubmit", "ontextinput", "onunload", "onwheel"]
-  -- in isElem >>>
-  --    hasAnyAttrs attrNames >>>
-  in   addIdIfNotPresent >>>
-     (((selectAttrValues attrNames &&& selectId) >>>
-      arr (\((handler, attrName), id) ->
-        Script () [ExprStmt () $ AssignExpr () OpAssign 
-                   (LDot () (CallExpr ()
-                             (DotRef () (VarRef () (Id () "document")) (Id () "getElementById"))
-                            [StringLit () id]) attrName) (StringLit () handler)])
+  in addIdIfNotPresent >>>
+     (((selectId &&& selectAttrValues attrNames) >>>
+      arr (\(id, (handler, attrName)) -> makeHandler id attrName handler)
       >>> appendScript) &&&
      removeAttributes attrNames) >>>
      arr snd
 
+makeHandler :: Default a => String -> String -> String -> JavaScript a
+makeHandler id handlerName handlerSource =
+  let mEventName = case handlerName of
+                    'o':'n':s | not $ null s -> Just s
+                    _                        -> Nothing
+      either2maybe (Left _) = Nothing
+      either2maybe (Right x)= Just x
+  in fromMaybe (script []) $
+     do eventName <- mEventName
+        h <- either2maybe $ reannotate def <$> parseFromString handlerSource
+        return $ script [expr $ call (
+                            call (var "document" `dot` "getElementById") [string id]
+                            `dot` "addEventListener")
+                         [string eventName, lambda [] $ unJavaScript h, bool False]
+                        ]
+                                
 parseJS :: TArr String (JavaScript SourcePos)
 parseJS = arr (parse program "") >>> eitherToFailure
 
