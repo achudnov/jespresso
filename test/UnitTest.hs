@@ -15,6 +15,8 @@ import Control.Arrow
 import Control.Monad
 import Data.Char
 import Control.Monad.IO.Class
+import Data.Algorithm.Diff
+import Data.Algorithm.DiffOutput
 
 main = do allCases <- getDirectoryContents casesDir
           allExpects <- getDirectoryContents expectsDir
@@ -35,15 +37,14 @@ genTest testFileName =
       state  = initialState ns
       normalizedA :: String -> TArr XmlTree XmlTree
       normalizedA s = single $ parseHTML s Nothing >>> consolidateArr
-      expectedA :: String -> TArr XmlTree XmlTree      
-      expectedA   s = single $ parseHTML s Nothing
       runX :: forall r s. (String -> TArr XmlTree XmlTree) -> FilePath -> ValueGetter r String
       runX a f = liftIO $ do
           s <- readFile f
           let arr :: TArr XmlTree String
               arr = (a s) >>> writeDocumentToString [withOutputHTML, withOutputEncoding utf8]
           liftM head $ runXIOState state $ arr
-      expectedValueAction = runX expectedA expectFileName
+      expectedValueAction :: forall r. ValueGetter r String
+      expectedValueAction = liftIO $ readFile expectFileName
       testValueAction     = runX normalizedA  caseFileName
   in goldenTest testFileName expectedValueAction testValueAction verifyOutput (const $ return ())
 
@@ -51,6 +52,6 @@ verifyOutput :: String -> String -> IO (Maybe String)
 verifyOutput expected actual = return $
   let fs = filter (not . isSpace)
       msg = "Failed to match expected output to normalized input:\n\
-            \Expected:\n" ++ expected ++ "\n\nSaw:\n" ++ actual ++ "\n"
+            \Diff:\n" ++ ppDiff (getGroupedDiff (lines expected) (lines actual))
   in  if (fs expected == fs actual) then Nothing
                                     else Just msg
