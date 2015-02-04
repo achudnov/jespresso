@@ -1,5 +1,5 @@
 = 1.0.1 =
-Major bug fixes to handler and source attributes extraction.
+Major bug fixes to handler and source attributes extraction. Fixed HTML consolidation bug that substituted HTML/XML entities in inline scripts.
 
 = 1.0 =
 Changed the API in Text.Html.Consolidate: extractJSArr and extract now
