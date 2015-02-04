@@ -80,7 +80,13 @@ parseHTML s mbase_uri =
 renderHTML :: ConsState -> TArr XmlTree XmlTree -> IO String
 renderHTML ns a = 
   let state  = initialState ns
-  in liftM head $ runXIOState state (single a >>> writeDocumentToString [withOutputHTML, withOutputEncoding utf8])
+  in liftM head $ runXIOState state (single a >>> writeDocumentToString
+                                     -- Using plain text output to
+                                     -- prevent entity substitution on
+                                     -- special XML/HTML characters
+                                     -- that are part of inline
+                                     -- scripts
+                                     [withOutputPLAIN, withOutputEncoding utf8])
 
 -- | Takes an HTML page source as a string and an optional base URI
 -- (for resolving relative URI's) and produces an HTML page with all
