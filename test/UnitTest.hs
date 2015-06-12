@@ -37,15 +37,15 @@ genTest testFileName =
       state  = initialState ns
       normalizedA :: String -> TArr XmlTree XmlTree
       normalizedA s = single $ parseHTML s Nothing >>> consolidateArr
-      runX :: forall r s. (String -> TArr XmlTree XmlTree) -> FilePath -> ValueGetter r String
-      runX a f = liftIO $ do
+      runX :: forall r s. (String -> TArr XmlTree XmlTree) -> FilePath -> IO String
+      runX a f = do
           s <- readFile f
           let arr :: TArr XmlTree String
               arr = (a s) >>> writeDocumentToString [withOutputHTML, withOutputEncoding utf8]
           liftM head $ runXIOState state $ arr
-      expectedValueAction :: forall r. ValueGetter r String
-      expectedValueAction = liftIO $ readFile expectFileName
-      testValueAction     = runX normalizedA  caseFileName
+      expectedValueAction :: IO String
+      expectedValueAction = readFile expectFileName
+      testValueAction     = runX normalizedA caseFileName
   in goldenTest testFileName expectedValueAction testValueAction verifyOutput (const $ return ())
 
 verifyOutput :: String -> String -> IO (Maybe String)
