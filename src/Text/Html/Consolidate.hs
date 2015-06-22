@@ -323,7 +323,7 @@ appendScript = arr (\s -> let Script _ stmts = s in stmts) >>> appendStatements
 -- constructors
 -- | Constructs a new JavaScript element
 scriptElement :: ArrowXml ar => ar (JavaScript a) XmlTree
-scriptElement = mkElement (mkName "script") (sattr "type" "text/javascript") $< arr (txt . show . prettyPrint)
+scriptElement = (mkElement (mkName "script") (sattr "type" "text/javascript") $< arr (txt . show . prettyPrint)) >>> addAttr "defer" ""
 
 -- Selectors
 -- | A selector for SCRIPT tags with JavaScript or empty type
