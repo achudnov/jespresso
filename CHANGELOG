@@ -1,3 +1,6 @@
+= 1.0.2 =
+Bug fix: prevent potential race conditions when setting event handlers in the consolidated script tag by adding a defer attribute.
+
 = 1.0.1.1 =
 Dependency upgrades. Now builds on LTS Hackage 2.13.
 
