@@ -1,3 +1,6 @@
+= 1.1.0 =
+Ported to language-ecmascript-5.0.0.
+
 = 1.0.2 =
 Bug fix: prevent potential race conditions when setting event handlers in the consolidated script tag by adding a defer attribute.
 

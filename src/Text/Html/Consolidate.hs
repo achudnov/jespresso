@@ -21,11 +21,12 @@ import Text.XML.HXT.Core hiding (swap)
 import Text.XML.HXT.Arrow.XmlState.RunIOStateArrow
 import Text.XML.HXT.Arrow.XmlArrow
 import Text.XML.HXT.TagSoup
-import Language.ECMAScript3.Syntax
-import Language.ECMAScript3.Syntax.CodeGen hiding (this)
-import Language.ECMAScript3.Syntax.Annotations
-import Language.ECMAScript3.PrettyPrint
-import Language.ECMAScript3.Parser
+import Language.ECMAScript5.Syntax
+import Language.ECMAScript5.Syntax.CodeGen hiding (this)
+import Language.ECMAScript5.Syntax.Annotations
+import Language.ECMAScript5.PrettyPrint
+import Language.ECMAScript5.Parser hiding (program)
+import qualified Language.ECMAScript5.Parser as Parse (program)
 import Data.List (isInfixOf)
 import Data.Default.Class
 import Network.HTTP
@@ -105,7 +106,7 @@ consolidateArr = extractJSArr >>> insertJSArr
 -- | Extacts all JavaScript code in the given
 -- HTML page source as a single program. Takes an optional base URI
 -- for resolving relative URI's.
-extract :: String -> Maybe URI -> IO (JavaScript ())
+extract :: String -> Maybe URI -> IO (Program ())
 extract s mbase_uri =
   let state = initialState $ initialConsState True mbase_uri [] in
   do [(_, js)] <- runXIOState state $ single $ 
@@ -122,7 +123,7 @@ extractPretty s muri = liftM (show . prettyPrint) $ extract s muri
 
 -- | Extracts all JavaScript from HTML. There shouldn't be any
 -- JavaScript in the resulting XmlTree
-extractJSArr :: TArr XmlTree (XmlTree, JavaScript ())
+extractJSArr :: TArr XmlTree (XmlTree, Program ())
 extractJSArr =
   (choiceA [isAJavaScript :-> ifA (hasAttr "src") extractExternalScript
                                                    extractInlineScript
@@ -134,7 +135,7 @@ extractJSArr =
   >>>returnScript
   where returnScript = (returnA &&& getUserState)
                     >>> second (arr (\s -> let ConsState _ _ _ stmts = s 
-                                           in  Script () stmts))
+                                           in  Program () stmts))
         isFrame = isElem >>> (hasName "frame" <+> hasName "iframe")
         hasOneOfNames tagNames = (getName >>> isA (`elem` tagNames)) `guards` this
         hasOneOfAttrs attrNames = (getAttrl >>> hasOneOfNames attrNames) `guards` this
@@ -167,7 +168,7 @@ processTopDownUntilAndWhenMatches t p =
   -- ifA p (t >>> processChildren (processTopDownUntilAndWhenMatches t p)) returnA
                        
 -- | Inserts JavaScript at the end of the HTML body.
-insertJSArr :: TArr (XmlTree, JavaScript a) XmlTree
+insertJSArr :: TArr (XmlTree, Program a) XmlTree
 insertJSArr = (swap ^<< second scriptElement) >>>
               arr2A (\scr ->  processTopDown $ changeChildren (++ [scr]) `when`
                               hasName "body")
@@ -234,10 +235,10 @@ extractURLProp =
   addIdIfNotPresent >>>
   (((selectAttrValues ["src", "href", "action"] &&& selectId) >>>
     arr (\((url, attrName), id) -> 
-     Script () [ExprStmt () $ AssignExpr () OpAssign 
-                (LDot () (CallExpr ()
+     Program () [ExprStmt () $ AssignExpr () OpAssign 
+                (DotRef () (CallExpr ()
                           (DotRef () (VarRef () (Id () "document")) (Id () "getElementById"))
-                          [StringLit () id]) attrName) (StringLit () url)]) >>>
+                          [StringLit () id]) (ident attrName)) (StringLit () url)]) >>>
    appendScript) &&& 
   removeAttributes ["src", "href", "action"]) >>>
   arr snd
@@ -261,24 +262,24 @@ extractEventHandler =
      removeAttributes attrNames) >>>
      arr snd
 
-makeHandler :: Default a => String -> String -> String -> JavaScript a
+makeHandler :: Default a => String -> String -> String -> Program a
 makeHandler id handlerName handlerSource =
   let mEventName = case handlerName of
                     'o':'n':s | not $ null s -> Just s
                     _                        -> Nothing
       either2maybe (Left _) = Nothing
       either2maybe (Right x)= Just x
-  in fromMaybe (script []) $
+  in fromMaybe (program []) $
      do eventName <- mEventName
         h <- either2maybe $ reannotate def <$> parseFromString handlerSource
-        return $ script [expr $ call (
+        return $ program [expr $ call (
                             call (var "document" `dot` "getElementById") [string id]
                             `dot` "addEventListener")
-                         [string eventName, lambda [] $ unJavaScript h, bool False]
+                         [string eventName, lambda [] $ unProgram h, bool False]
                         ]
                                 
-parseJS :: TArr String (JavaScript SourcePos)
-parseJS = arr (parse program "") >>> eitherToFailure
+parseJS :: TArr String (Program SourceSpan)
+parseJS = arr (parse Parse.program "") >>> eitherToFailure >>> arr (reannotate fst)
 
 -- Arrow tools
 -- | Failure reporting arrow constructor
@@ -317,12 +318,12 @@ appendStatements = (getUserState &&& returnA) >>>
                          ConsState grace baseURI cookies (script++addScript)) >>>
                    setUserState >>> arr (const ())
 
-appendScript :: TArr (JavaScript ()) ()
-appendScript = arr (\s -> let Script _ stmts = s in stmts) >>> appendStatements
+appendScript :: TArr (Program ()) ()
+appendScript = arr (\s -> let Program _ stmts = s in stmts) >>> appendStatements
                    
 -- constructors
 -- | Constructs a new JavaScript element
-scriptElement :: ArrowXml ar => ar (JavaScript a) XmlTree
+scriptElement :: ArrowXml ar => ar (Program a) XmlTree
 scriptElement = (mkElement (mkName "script") (sattr "type" "text/javascript") $< arr (txt . show . prettyPrint)) >>> addAttr "defer" ""
 
 -- Selectors
