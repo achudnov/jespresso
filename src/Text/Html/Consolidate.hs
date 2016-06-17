@@ -257,27 +257,51 @@ extractEventHandler =
                    "onselect", "onsubmit", "ontextinput", "onunload", "onwheel"]
   in addIdIfNotPresent >>>
      (((selectId &&& selectAttrValues attrNames) >>>
-      arr (\(id, (handler, attrName)) -> makeHandler id attrName handler)
+      arr (\(id, (handler, attrName)) -> makeHandlerDeclaration id attrName handler)
       >>> appendScript) &&&
      removeAttributes attrNames) >>>
      arr snd
 
-makeHandler :: Default a => String -> String -> String -> Program a
-makeHandler id handlerName handlerSource =
+makeHandlerDeclaration :: Default a => String -> String -> String -> Program a
+makeHandlerDeclaration id handlerName handlerSource =
   let mEventName = case handlerName of
                     'o':'n':s | not $ null s -> Just s
                     _                        -> Nothing
+      isErrorHandler = handlerName == "onerror"
       either2maybe (Left _) = Nothing
       either2maybe (Right x)= Just x
   in fromMaybe (program []) $
      do eventName <- mEventName
-        h <- either2maybe $ reannotate def <$> parseFromString handlerSource
+        hsrc <- either2maybe $ reannotate def <$> parseFromString handlerSource
         return $ program [expr $ call (
                             call (var "document" `dot` "getElementById") [string id]
                             `dot` "addEventListener")
-                         [string eventName, lambda [] $ unProgram h, bool False]
-                        ]
-                                
+                          [string eventName, (if isErrorHandler then makeErrorHandler else makeHandler) hsrc, bool False]
+                         ]
+
+-- | Makes a handler function expression from the parsed inlined
+-- handler source for any event, but onerror.
+-- 
+-- HTML5 spec, section 6.1.5.1, "internal raw uncompiled handler":
+-- using the script execution environment obtained above, create a
+-- function object (as defined in ECMAScript edition 5 section 13.2
+-- Creating Function Objects), with Parameter list
+-- FormalParameterList. If H is an onerror event handler of a Window
+-- object, let the function have five arguments, named event, source,
+-- lineno, colno, and error. 
+-- 
+-- Unsupported as of yet: let Scope be the result of
+-- NewObjectEnvironment(document, the global environment). If form
+-- owner is not null, let Scope be the result of
+-- NewObjectEnvironment(form owner, Scope). If element is not null,
+-- let Scope be the result of NewObjectEnvironment(element, Scope).
+makeErrorHandler :: Default a => Program a -> Expression a
+makeErrorHandler = lambda ["event", "source", "lineno", "colno", "error"] . unProgram
+
+-- | Otherwise, let the function have a single argument called event.
+makeHandler :: Default a => Program a -> Expression a
+makeHandler = lambda ["event"] . unProgram
+
 parseJS :: TArr String (Program SourceSpan)
 parseJS = arr (parse Parse.program "") >>> eitherToFailure >>> arr (reannotate fst)
 
