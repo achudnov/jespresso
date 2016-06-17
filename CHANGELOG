@@ -1,3 +1,6 @@
+= 1.2.0 =
+Increased compatibility of handler extraction with the HTML5 spec. Now, the generated handler functions will have implicit parameters expected by the inline handler code.
+
 = 1.1.0 =
 Ported to language-ecmascript-5.0.0.
 
