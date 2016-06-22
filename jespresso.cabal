@@ -40,8 +40,8 @@ library
                , http-encodings >= 0.9.1 && < 1.0
                , network == 2.6.*
                , network-uri == 2.6.*
-               , data-default-class >= 0.0.1 && < 0.1
-               , data-default-instances-base >= 0.0.1 && < 0.1
+               , data-default-class >= 0.0.1 && < 0.2
+               , data-default-instances-base >= 0.0.1 && < 0.2
   exposed-modules:    Text.Html.Consolidate
                       Network.Browser.Simple
   hs-source-dirs:     src
